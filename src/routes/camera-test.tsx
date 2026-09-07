@@ -1,9 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CameraPreview } from "@/components/media/CameraPreview";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
 import { ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/camera-test")({
+  beforeLoad: () => {
+    if (!import.meta.env.DEV) throw redirect({ to: "/" });
+  },
   head: () => ({
     meta: [
       { title: "Camera Subsystem Test — VOXONIX" },

@@ -5,8 +5,10 @@ import {
   SIGN_STORAGE_KEY,
   DEFAULT_SIGN_CONFIG,
 } from "@/hooks/use-sign-recognition-context";
+import { useAccessibility } from "@/hooks/use-accessibility";
 
 export function SignRecognitionProvider({ children }: { children: ReactNode }) {
+  const { preferences } = useAccessibility();
   const [config, setConfigState] = useState<SignRecognitionConfig>(DEFAULT_SIGN_CONFIG);
 
   useEffect(() => {
@@ -20,6 +22,13 @@ export function SignRecognitionProvider({ children }: { children: ReactNode }) {
       console.warn("[SignRecognitionContext] Error reading localStorage config:", err);
     }
   }, []);
+
+  // Profile preferences own the effective runtime setting. This prevents the
+  // Deaf profile from claiming sign recognition is active while its detector
+  // remains disabled in a disconnected local configuration.
+  useEffect(() => {
+    setConfigState((prev) => ({ ...prev, enabled: preferences.signRecognitionEnabled }));
+  }, [preferences.signRecognitionEnabled]);
 
   const updateConfig = useCallback((patch: Partial<SignRecognitionConfig>) => {
     setConfigState((prev) => {

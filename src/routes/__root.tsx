@@ -118,6 +118,25 @@ import { AccessibilityProvider } from "@/context/accessibility-context";
 import { AuthProvider } from "@/context/auth-context";
 import { TTSContextProvider } from "@/context/tts-context";
 import { SignRecognitionProvider } from "@/context/sign-recognition-context";
+import { useAccessibility } from "@/hooks/use-accessibility";
+
+function AccessibilityEffects({ children }: { children: ReactNode }) {
+  const { preferences } = useAccessibility();
+
+  useEffect(() => {
+    const body = document.body;
+    body.dataset.highContrast = String(preferences.highContrast);
+    body.dataset.largeControls = String(preferences.largeControls);
+    body.dataset.reducedMotion = String(preferences.reducedMotion);
+    return () => {
+      delete body.dataset.highContrast;
+      delete body.dataset.largeControls;
+      delete body.dataset.reducedMotion;
+    };
+  }, [preferences.highContrast, preferences.largeControls, preferences.reducedMotion]);
+
+  return <>{children}</>;
+}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -126,12 +145,14 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AccessibilityProvider>
-          <TTSContextProvider>
-            <SignRecognitionProvider>
-              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-              <Outlet />
-            </SignRecognitionProvider>
-          </TTSContextProvider>
+          <AccessibilityEffects>
+            <TTSContextProvider>
+              <SignRecognitionProvider>
+                {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+                <Outlet />
+              </SignRecognitionProvider>
+            </TTSContextProvider>
+          </AccessibilityEffects>
         </AccessibilityProvider>
       </AuthProvider>
     </QueryClientProvider>

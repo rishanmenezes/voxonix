@@ -1,10 +1,13 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CameraPreview } from "@/components/media/CameraPreview";
 import { MicrophonePreview } from "@/components/media/MicrophonePreview";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
 import { ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/media-test")({
+  beforeLoad: () => {
+    if (!import.meta.env.DEV) throw redirect({ to: "/" });
+  },
   head: () => ({
     meta: [
       { title: "Local Media Integration Test — VOXONIX" },

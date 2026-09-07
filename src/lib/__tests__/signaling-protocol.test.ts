@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { SignalMessage, CaptionPayload } from "../webrtc/signaling-protocol";
+import { MAX_PARTICIPANTS } from "../webrtc/config";
 
 describe("WebRTC Signaling Protocol Invariants", () => {
+  it("enforces the product's one-to-one room capacity", () => {
+    expect(MAX_PARTICIPANTS).toBe(2);
+  });
   it("serializes and deserializes join messages correctly", () => {
     const msg: SignalMessage = {
       type: "join",

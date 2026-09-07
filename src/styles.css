@@ -2,6 +2,27 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* Effective accessibility preferences are applied at the document boundary. */
+body[data-high-contrast="true"] {
+  filter: contrast(1.2);
+}
+
+body[data-large-controls="true"] button,
+body[data-large-controls="true"] input,
+body[data-large-controls="true"] select,
+body[data-large-controls="true"] textarea {
+  min-height: 2.75rem;
+}
+
+body[data-reduced-motion="true"] *,
+body[data-reduced-motion="true"] *::before,
+body[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* VOXONIX — Golden Luxe

@@ -343,31 +343,33 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
           case "offer":
           case "answer":
           case "ice-candidate": {
-            if (!currentRoomId) return;
+            if (!currentRoomId || !currentPeerId) return;
             const room = rooms.get(currentRoomId);
             if (!room) return;
 
             const target = room.peers.get(msg.to);
             if (target && target.ws.readyState === WebSocket.OPEN) {
-              target.ws.send(JSON.stringify(msg));
+              // Never forward a client-supplied sender identity. The receiving
+              // browser may use `from` to select a PeerConnectionManager.
+              target.ws.send(JSON.stringify({ ...msg, from: currentPeerId }));
             }
             break;
           }
 
           case "media-state": {
-            if (!currentRoomId) return;
+            if (!currentRoomId || !currentPeerId) return;
             const room = rooms.get(currentRoomId);
             if (!room) return;
 
             if (msg.to) {
               const target = room.peers.get(msg.to);
               if (target && target.ws.readyState === WebSocket.OPEN) {
-                target.ws.send(JSON.stringify(msg));
+                target.ws.send(JSON.stringify({ ...msg, from: currentPeerId }));
               }
             } else {
               for (const [pid, peer] of room.peers.entries()) {
-                if (pid !== msg.from && peer.ws.readyState === WebSocket.OPEN) {
-                  peer.ws.send(JSON.stringify(msg));
+                if (pid !== currentPeerId && peer.ws.readyState === WebSocket.OPEN) {
+                  peer.ws.send(JSON.stringify({ ...msg, from: currentPeerId }));
                 }
               }
             }
@@ -395,6 +397,16 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
                 text: msg.caption.text,
                 isFinal: msg.caption.isFinal,
                 timestamp: msg.caption.timestamp || Date.now(),
+                source: msg.caption.source,
+                confidence:
+                  typeof msg.caption.confidence === "number" ? msg.caption.confidence : undefined,
+                metadata: msg.caption.metadata
+                  ? {
+                      signHand: msg.caption.metadata.signHand,
+                      confidenceScore: msg.caption.metadata.confidenceScore,
+                      isGesture: Boolean(msg.caption.metadata.isGesture),
+                    }
+                  : undefined,
                 language: msg.caption.language,
                 clientSentAt: msg.caption.clientSentAt || msg.caption.timestamp || serverReceivedAt,
                 serverReceivedAt,
