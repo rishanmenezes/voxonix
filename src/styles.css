@@ -187,21 +187,15 @@
   animation: marquee 40s linear infinite;
 }
 
-/* Explicit horizontal mirroring for call video presentation */
+/* Single render authority for video orientation */
 .video-mirrored,
-video.video-mirrored,
 [data-mirror="true"] {
-  transform: scaleX(-1) !important;
-  -webkit-transform: scaleX(-1) !important;
-  scale: none !important;
+  transform: scaleX(-1);
 }
 
 .video-natural,
-video.video-natural,
 [data-mirror="false"] {
-  transform: none !important;
-  -webkit-transform: none !important;
-  scale: none !important;
+  transform: none;
 }
 
 /* Hide scrollbar for clean horizontal participant strip */

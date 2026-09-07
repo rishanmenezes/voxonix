@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
-import { useAuth } from "@/context/auth-context";
+import { useAuth } from "@/hooks/use-auth";
 import { redirectIfAuthenticated } from "@/lib/auth-helpers";
 import { ArrowUpRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 

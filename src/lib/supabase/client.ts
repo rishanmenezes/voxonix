@@ -16,17 +16,46 @@
  */
 
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+let _client: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabasePublishableKey) {
-  throw new Error(
-    "Missing Supabase environment variables.\n" +
-      "Copy .env.local.example → .env.local and set:\n" +
-      "  VITE_SUPABASE_URL\n" +
-      "  VITE_SUPABASE_PUBLISHABLE_KEY",
-  );
+/**
+ * Returns the initialized Supabase browser client.
+ * Validates environment variables on invocation and throws an actionable configuration error if missing.
+ */
+export function getSupabaseBrowserClient(): SupabaseClient {
+  if (_client) return _client;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as
+    | string
+    | undefined;
+
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error(
+      "Missing Supabase environment variables.\n" +
+        "Copy .env.local.example → .env.local and set:\n" +
+        "  VITE_SUPABASE_URL\n" +
+        "  VITE_SUPABASE_PUBLISHABLE_KEY",
+    );
+  }
+
+  _client = createBrowserClient(supabaseUrl, supabasePublishableKey);
+  return _client;
 }
 
-export const supabase = createBrowserClient(supabaseUrl, supabasePublishableKey);
+/**
+ * Lazy proxy to the browser Supabase client.
+ * Defers client creation and environment validation until first access.
+ */
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseBrowserClient();
+    const value = Reflect.get(client, prop);
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  },
+});

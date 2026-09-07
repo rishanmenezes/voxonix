@@ -79,7 +79,7 @@ export class SignClassificationEngine {
 
   constructor(options: SignClassificationEngineOptions) {
     this.localPeerId = options.localPeerId;
-    this.localDisplayName = options.localDisplayName || "You";
+    this.localDisplayName = options.localDisplayName || "Participant";
     if (options.initialConfig) {
       this.config = { ...this.config, ...options.initialConfig };
     }

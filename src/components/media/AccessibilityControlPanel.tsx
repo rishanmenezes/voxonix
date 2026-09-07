@@ -13,9 +13,9 @@ import {
   Shield,
   Check,
 } from "lucide-react";
-import { useTTS } from "@/context/tts-context";
-import { useSignRecognitionContext } from "@/context/sign-recognition-context";
-import { useAccessibility } from "@/context/accessibility-context";
+import { useTTS } from "@/hooks/use-tts";
+import { useSignRecognitionContext } from "@/hooks/use-sign-recognition-context";
+import { useAccessibility } from "@/hooks/use-accessibility";
 
 interface AccessibilityControlPanelProps {
   isOpen: boolean;
@@ -38,7 +38,13 @@ export function AccessibilityControlPanel({
   onToggleGestureSafe,
   className = "",
 }: AccessibilityControlPanelProps) {
-  const { config: ttsConfig, updateConfig: updateTTSConfig, toggleTTS, voices, enableWithGesture } = useTTS();
+  const {
+    config: ttsConfig,
+    updateConfig: updateTTSConfig,
+    toggleTTS,
+    voices,
+    enableWithGesture,
+  } = useTTS();
   const { config: signConfig, toggleSignRecognition } = useSignRecognitionContext();
   const { profileInfo, preferences, updatePreferences } = useAccessibility();
 

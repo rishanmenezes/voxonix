@@ -27,7 +27,10 @@ export interface AccessibilityProfileInfo {
 export const STORAGE_KEY_PROFILE = "voxonix.accessibilityProfile";
 export const STORAGE_KEY_PREFERENCES = "voxonix.communicationPreferences";
 
-export const DEFAULT_PREFERENCES_BY_PROFILE: Record<AccessibilityProfile, CommunicationPreferences> = {
+export const DEFAULT_PREFERENCES_BY_PROFILE: Record<
+  AccessibilityProfile,
+  CommunicationPreferences
+> = {
   blind: {
     captionsEnabled: true,
     speechOutputEnabled: true,
@@ -158,16 +161,31 @@ export function normalizeCommunicationPreferences(
   raw: unknown,
   profile?: AccessibilityProfile | null,
 ): CommunicationPreferences {
-  const fallback = profile ? DEFAULT_PREFERENCES_BY_PROFILE[profile] : DEFAULT_PREFERENCES_BY_PROFILE.standard;
+  const fallback = profile
+    ? DEFAULT_PREFERENCES_BY_PROFILE[profile]
+    : DEFAULT_PREFERENCES_BY_PROFILE.standard;
   if (!raw || typeof raw !== "object") return { ...fallback };
 
   const r = raw as Record<string, unknown>;
   return {
-    captionsEnabled: typeof r.captionsEnabled === "boolean" ? r.captionsEnabled : fallback.captionsEnabled,
-    speechOutputEnabled: typeof r.speechOutputEnabled === "boolean" ? r.speechOutputEnabled : fallback.speechOutputEnabled,
-    typeToSpeakEnabled: typeof r.typeToSpeakEnabled === "boolean" ? r.typeToSpeakEnabled : fallback.typeToSpeakEnabled,
-    signRecognitionEnabled: typeof r.signRecognitionEnabled === "boolean" ? r.signRecognitionEnabled : fallback.signRecognitionEnabled,
-    gestureSafeFraming: typeof r.gestureSafeFraming === "boolean" ? r.gestureSafeFraming : fallback.gestureSafeFraming,
+    captionsEnabled:
+      typeof r.captionsEnabled === "boolean" ? r.captionsEnabled : fallback.captionsEnabled,
+    speechOutputEnabled:
+      typeof r.speechOutputEnabled === "boolean"
+        ? r.speechOutputEnabled
+        : fallback.speechOutputEnabled,
+    typeToSpeakEnabled:
+      typeof r.typeToSpeakEnabled === "boolean"
+        ? r.typeToSpeakEnabled
+        : fallback.typeToSpeakEnabled,
+    signRecognitionEnabled:
+      typeof r.signRecognitionEnabled === "boolean"
+        ? r.signRecognitionEnabled
+        : fallback.signRecognitionEnabled,
+    gestureSafeFraming:
+      typeof r.gestureSafeFraming === "boolean"
+        ? r.gestureSafeFraming
+        : fallback.gestureSafeFraming,
     highContrast: typeof r.highContrast === "boolean" ? r.highContrast : fallback.highContrast,
     largeControls: typeof r.largeControls === "boolean" ? r.largeControls : fallback.largeControls,
     reducedMotion: typeof r.reducedMotion === "boolean" ? r.reducedMotion : fallback.reducedMotion,

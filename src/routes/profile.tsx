@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { requireAuth } from "@/lib/auth-helpers";
-import { useAuth } from "@/context/auth-context";
-import { useAccessibility } from "@/context/accessibility-context";
+import { useAuth } from "@/hooks/use-auth";
+
+import { useAccessibility } from "@/hooks/use-accessibility";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
-import {
-  ALL_PROFILES_LIST,
-  type AccessibilityProfile,
-} from "@/lib/accessibility";
+import { ALL_PROFILES_LIST, type AccessibilityProfile } from "@/lib/accessibility";
 import {
   ArrowLeft,
   User,
@@ -27,7 +25,10 @@ export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
       { title: "Profile & Communication Mode — VOXONIX" },
-      { name: "description", content: "Your Voxonix profile, communication mode, and accessibility preferences." },
+      {
+        name: "description",
+        content: "Your Voxonix profile, communication mode, and accessibility preferences.",
+      },
     ],
   }),
   component: ProfilePage,
@@ -192,7 +193,8 @@ function ProfilePage() {
               </div>
             </div>
             <p className="mb-6 text-xs leading-relaxed text-noir/65">
-              Select your primary mode to set recommended defaults. You can still customize or override any feature at any time.
+              Select your primary mode to set recommended defaults. You can still customize or
+              override any feature at any time.
             </p>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -243,7 +245,9 @@ function ProfilePage() {
 
           {/* Granular Communication Preferences */}
           <div className="rounded-3xl border border-noir/15 bg-card p-6 shadow-sm">
-            <h2 className="mb-2 font-display text-xl font-bold text-noir">Communication Preferences</h2>
+            <h2 className="mb-2 font-display text-xl font-bold text-noir">
+              Communication Preferences
+            </h2>
             <p className="mb-4 text-xs text-noir/65">
               Fine-tune the multimodal communication bus features for your calls.
             </p>
@@ -252,10 +256,14 @@ function ProfilePage() {
               <div className="flex items-center justify-between rounded-xl border border-noir/10 p-3 bg-background/40">
                 <div>
                   <p className="font-bold text-noir">Live Closed Captions</p>
-                  <p className="text-[10px] text-noir/50">Display speech-to-text subtitles in call room</p>
+                  <p className="text-[10px] text-noir/50">
+                    Display speech-to-text subtitles in call room
+                  </p>
                 </div>
                 <button
-                  onClick={() => updatePreferences({ captionsEnabled: !preferences.captionsEnabled })}
+                  onClick={() =>
+                    updatePreferences({ captionsEnabled: !preferences.captionsEnabled })
+                  }
                   className={`rounded-full px-3 py-1 font-bold transition ${
                     preferences.captionsEnabled ? "bg-noir text-cream" : "bg-noir/10 text-noir/60"
                   }`}
@@ -267,12 +275,18 @@ function ProfilePage() {
               <div className="flex items-center justify-between rounded-xl border border-noir/10 p-3 bg-background/40">
                 <div>
                   <p className="font-bold text-noir">Speech Output (TTS)</p>
-                  <p className="text-[10px] text-noir/50">Speak incoming captions with acoustic feedback suppression</p>
+                  <p className="text-[10px] text-noir/50">
+                    Speak incoming captions with acoustic feedback suppression
+                  </p>
                 </div>
                 <button
-                  onClick={() => updatePreferences({ speechOutputEnabled: !preferences.speechOutputEnabled })}
+                  onClick={() =>
+                    updatePreferences({ speechOutputEnabled: !preferences.speechOutputEnabled })
+                  }
                   className={`rounded-full px-3 py-1 font-bold transition ${
-                    preferences.speechOutputEnabled ? "bg-wine text-cream" : "bg-noir/10 text-noir/60"
+                    preferences.speechOutputEnabled
+                      ? "bg-wine text-cream"
+                      : "bg-noir/10 text-noir/60"
                   }`}
                 >
                   {preferences.speechOutputEnabled ? "Enabled" : "Disabled"}
@@ -282,12 +296,20 @@ function ProfilePage() {
               <div className="flex items-center justify-between rounded-xl border border-noir/10 p-3 bg-background/40">
                 <div>
                   <p className="font-bold text-noir">Sign Language Recognition</p>
-                  <p className="text-[10px] text-noir/50">Track ASL gestures with MediaPipe camera stream</p>
+                  <p className="text-[10px] text-noir/50">
+                    Track ASL gestures with MediaPipe camera stream
+                  </p>
                 </div>
                 <button
-                  onClick={() => updatePreferences({ signRecognitionEnabled: !preferences.signRecognitionEnabled })}
+                  onClick={() =>
+                    updatePreferences({
+                      signRecognitionEnabled: !preferences.signRecognitionEnabled,
+                    })
+                  }
                   className={`rounded-full px-3 py-1 font-bold transition ${
-                    preferences.signRecognitionEnabled ? "bg-amber-600 text-cream" : "bg-noir/10 text-noir/60"
+                    preferences.signRecognitionEnabled
+                      ? "bg-amber-600 text-cream"
+                      : "bg-noir/10 text-noir/60"
                   }`}
                 >
                   {preferences.signRecognitionEnabled ? "Enabled" : "Disabled"}
@@ -297,12 +319,18 @@ function ProfilePage() {
               <div className="flex items-center justify-between rounded-xl border border-noir/10 p-3 bg-background/40">
                 <div>
                   <p className="font-bold text-noir">Gesture-Safe Framing</p>
-                  <p className="text-[10px] text-noir/50">Preserve full uncropped aspect ratio for signing hands</p>
+                  <p className="text-[10px] text-noir/50">
+                    Preserve full uncropped aspect ratio for signing hands
+                  </p>
                 </div>
                 <button
-                  onClick={() => updatePreferences({ gestureSafeFraming: !preferences.gestureSafeFraming })}
+                  onClick={() =>
+                    updatePreferences({ gestureSafeFraming: !preferences.gestureSafeFraming })
+                  }
                   className={`rounded-full px-3 py-1 font-bold transition ${
-                    preferences.gestureSafeFraming ? "bg-emerald-700 text-cream" : "bg-noir/10 text-noir/60"
+                    preferences.gestureSafeFraming
+                      ? "bg-emerald-700 text-cream"
+                      : "bg-noir/10 text-noir/60"
                   }`}
                 >
                   {preferences.gestureSafeFraming ? "Enabled" : "Disabled"}
@@ -315,9 +343,13 @@ function ProfilePage() {
                   <p className="text-[10px] text-noir/50">Display quick keyboard speech drawer</p>
                 </div>
                 <button
-                  onClick={() => updatePreferences({ typeToSpeakEnabled: !preferences.typeToSpeakEnabled })}
+                  onClick={() =>
+                    updatePreferences({ typeToSpeakEnabled: !preferences.typeToSpeakEnabled })
+                  }
                   className={`rounded-full px-3 py-1 font-bold transition ${
-                    preferences.typeToSpeakEnabled ? "bg-crimson text-cream" : "bg-noir/10 text-noir/60"
+                    preferences.typeToSpeakEnabled
+                      ? "bg-crimson text-cream"
+                      : "bg-noir/10 text-noir/60"
                   }`}
                 >
                   {preferences.typeToSpeakEnabled ? "Enabled" : "Disabled"}

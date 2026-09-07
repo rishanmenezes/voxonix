@@ -17,7 +17,11 @@ import { CameraPreview } from "@/components/media/CameraPreview";
 import { MicrophonePreview } from "@/components/media/MicrophonePreview";
 import { ParticipantTile } from "@/components/media/ParticipantTile";
 
+import { requireAuth } from "@/lib/auth-helpers";
+import { useAuth } from "@/hooks/use-auth";
+
 export const Route = createFileRoute("/webrtc-test")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "WebRTC Signaling & Peer Test — VOXONIX" },
@@ -31,6 +35,13 @@ export const Route = createFileRoute("/webrtc-test")({
 });
 
 function WebRtcTestPage() {
+  const { user, session } = useAuth();
+  const displayName =
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "Participant";
+
   const {
     peerId,
     roomId,
@@ -45,7 +56,10 @@ function WebRtcTestPage() {
     error,
     joinRoom,
     leaveRoom,
-  } = usePeerConnection();
+  } = usePeerConnection({
+    displayName,
+    authToken: session?.access_token,
+  });
 
   const [inputRoomId, setInputRoomId] = useState<string>(roomId || "TEST01");
 

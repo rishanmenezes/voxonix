@@ -1,13 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { requireAuth } from "@/lib/auth-helpers";
-import { useAuth } from "@/context/auth-context";
-import { useAccessibility } from "@/context/accessibility-context";
+import { useAuth } from "@/hooks/use-auth";
+import { useAccessibility } from "@/hooks/use-accessibility";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
-import {
-  ALL_PROFILES_LIST,
-  type AccessibilityProfile,
-} from "@/lib/accessibility";
+import { ALL_PROFILES_LIST, type AccessibilityProfile } from "@/lib/accessibility";
 import {
   Video,
   LogIn,
@@ -160,7 +157,11 @@ function DashboardPage() {
           <div className="flex items-center gap-2">
             <div className="rounded-2xl border border-noir/15 bg-card/90 px-4 py-2.5 shadow-sm backdrop-blur flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-crimson/10 text-crimson">
-                {profileInfo ? <ProfileIcon icon={profileInfo.icon} /> : <User className="h-4 w-4" />}
+                {profileInfo ? (
+                  <ProfileIcon icon={profileInfo.icon} />
+                ) : (
+                  <User className="h-4 w-4" />
+                )}
               </span>
               <div>
                 <p className="text-[10px] uppercase font-bold text-noir/50 tracking-wider">
@@ -193,7 +194,8 @@ function DashboardPage() {
                   How would you like Voxonix to help you communicate?
                 </h2>
                 <p className="text-sm text-noir/65 mt-0.5">
-                  Selecting a mode adjusts default tools and presentation. You can still use any feature.
+                  Selecting a mode adjusts default tools and presentation. You can still use any
+                  feature.
                 </p>
               </div>
               <button

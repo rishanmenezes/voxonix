@@ -1,14 +1,50 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
+import { createClient } from "@supabase/supabase-js";
 import type { SignalMessage, CaptionPayload } from "../lib/webrtc/signaling-protocol";
 import { MAX_PARTICIPANTS } from "../lib/webrtc/config";
 import { sttManager } from "./stt-manager";
+
+async function verifyAuthToken(
+  authToken?: string,
+): Promise<{ userId: string; email?: string; displayName?: string } | null> {
+  if (!authToken || typeof authToken !== "string" || !authToken.trim()) return null;
+  try {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      console.warn("[signaling] Missing Supabase environment configuration for token verification");
+      return null;
+    }
+    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const {
+      data: { user },
+      error,
+    } = await supabaseClient.auth.getUser(authToken);
+    if (error || !user) {
+      console.warn("[signaling] Auth verification failed:", error?.message);
+      return null;
+    }
+    const resolvedName =
+      user.user_metadata?.display_name ||
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "Participant";
+    return { userId: user.id, email: user.email, displayName: resolvedName };
+  } catch (err) {
+    console.error("[signaling] Auth verification exception:", err);
+    return null;
+  }
+}
 
 interface RoomPeer {
   peerId: string;
   ws: WebSocket;
   displayName?: string;
+  userId?: string;
 }
 
 interface Room {
@@ -81,26 +117,60 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
       currentPeerId = null;
     };
 
-    ws.on("message", (data: WebSocket.RawData, isBinary: boolean) => {
+    ws.on("message", async (data: WebSocket.RawData, isBinary: boolean) => {
       // Direct binary audio transport: eliminates ~33% Base64 encoding overhead
       if (isBinary) {
-        if (currentPeerId) {
-          const buffer = Buffer.isBuffer(data)
-            ? data
-            : Array.isArray(data)
-              ? Buffer.concat(data)
-              : Buffer.from(data);
-          sttManager.feedAudioChunk(currentPeerId, buffer);
+        if (!currentPeerId || !currentRoomId) {
+          console.log(`[signaling] Dropped binary data on unauthenticated socket`);
+          ws.close(4401, "Unauthorized");
+          return;
         }
+        const buffer = Buffer.isBuffer(data)
+          ? data
+          : Array.isArray(data)
+            ? Buffer.concat(data)
+            : Buffer.from(data);
+        sttManager.feedAudioChunk(currentPeerId, buffer);
         return;
       }
 
       try {
         const msg: SignalMessage = JSON.parse(data.toString());
 
+        // Security Invariant: Every socket must join with verified auth before sending any signaling message
+        if (msg.type !== "join" && (!currentRoomId || !currentPeerId)) {
+          console.log(`[signaling] Rejected unauthenticated message type=${msg.type} on socket`);
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              message: "Authentication required before signaling. Unauthorized.",
+            } satisfies SignalMessage),
+          );
+          ws.close(4401, "Unauthorized");
+          return;
+        }
+
         switch (msg.type) {
           case "join": {
-            const { roomId, peerId, displayName } = msg;
+            const { roomId, peerId, displayName, authToken } = msg;
+
+            // Security Invariant: Server-side token verification required for all room joins
+            const authUser = await verifyAuthToken(authToken);
+            if (!authUser) {
+              console.log(
+                `[signaling] Unauthorized join attempt rejected for room=${roomId} peer=${peerId}`,
+              );
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "Authentication required to join room. Unauthorized.",
+                } satisfies SignalMessage),
+              );
+              ws.close(4401, "Unauthorized");
+              return;
+            }
+
+            const effectiveDisplayName = displayName || authUser.displayName || "Participant";
 
             if (currentRoomId && currentPeerId) {
               cleanupPeer();
@@ -154,10 +224,15 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
             currentRoomId = roomId;
             currentPeerId = peerId;
 
-            room.peers.set(peerId, { peerId, ws, displayName });
+            room.peers.set(peerId, {
+              peerId,
+              ws,
+              displayName: effectiveDisplayName,
+              userId: authUser.userId,
+            });
 
             console.log(
-              `[signaling] join peer=${peerId} name=${displayName || "none"} room=${roomId} total=${room.peers.size}/${MAX_PARTICIPANTS}`,
+              `[signaling] join peer=${peerId} user=${authUser.userId} name=${effectiveDisplayName} room=${roomId} total=${room.peers.size}/${MAX_PARTICIPANTS}`,
             );
 
             ws.send(
@@ -167,7 +242,7 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
                 peerId,
                 peersCount: room.peers.size,
                 existingPeers,
-                displayName,
+                displayName: effectiveDisplayName,
               } satisfies SignalMessage),
             );
 
@@ -189,7 +264,7 @@ export function setupSignalingServer(server: UpgradeableServer): WebSocketServer
                   JSON.stringify({
                     type: "peer-joined",
                     peerId,
-                    displayName,
+                    displayName: effectiveDisplayName,
                     peersCount: room.peers.size,
                   } satisfies SignalMessage),
                 );

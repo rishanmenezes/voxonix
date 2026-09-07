@@ -38,6 +38,7 @@ export class SignalingBroker {
   private ws: WebSocket | null = null;
   private peerId: string;
   private displayName: string | undefined;
+  private authToken: string | undefined;
   private roomId: string | null = null;
   private peersCount: number = 0;
   private status: SignalingState = "disconnected";
@@ -45,10 +46,20 @@ export class SignalingBroker {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect: boolean = true;
 
-  constructor(peerId: string, callbacks: SignalingCallbacks = {}, displayName?: string) {
+  constructor(
+    peerId: string,
+    callbacks: SignalingCallbacks = {},
+    displayName?: string,
+    authToken?: string,
+  ) {
     this.peerId = peerId;
     this.callbacks = callbacks;
     this.displayName = displayName;
+    this.authToken = authToken;
+  }
+
+  public setAuthToken(token: string | undefined): void {
+    this.authToken = token;
   }
 
   public setCallbacks(callbacks: SignalingCallbacks): void {
@@ -109,6 +120,7 @@ export class SignalingBroker {
             roomId: this.roomId,
             peerId: this.peerId,
             displayName: this.displayName,
+            authToken: this.authToken,
           });
         }
       };
@@ -122,8 +134,15 @@ export class SignalingBroker {
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event: CloseEvent) => {
         this.setStatus("disconnected");
+        if (event.code === 4401 || event.reason === "Unauthorized") {
+          console.warn(
+            "[Signaling] Connection rejected by server (Unauthorized 4401). Disabling reconnect.",
+          );
+          this.shouldReconnect = false;
+          return;
+        }
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
@@ -279,9 +298,10 @@ export class SignalingBroker {
     });
   }
 
-  public joinRoom(roomId: string, displayName?: string): void {
+  public joinRoom(roomId: string, displayName?: string, authToken?: string): void {
     this.roomId = roomId;
     if (displayName) this.displayName = displayName;
+    if (authToken) this.authToken = authToken;
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.connect();
       return;
@@ -291,6 +311,7 @@ export class SignalingBroker {
       roomId,
       peerId: this.peerId,
       displayName: this.displayName,
+      authToken: this.authToken,
     });
   }
 

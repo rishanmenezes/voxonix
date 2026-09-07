@@ -1,7 +1,14 @@
-import { useRef, useEffect, useCallback } from "react";
-import { Mic, MicOff, VideoOff, Maximize2, Minimize2, Sparkles } from "lucide-react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { Mic, MicOff, VideoOff, Maximize2, Sparkles, Loader2, AlertCircle } from "lucide-react";
 
 export type FramingMode = "fill" | "gesture-safe";
+
+export type VideoRenderState =
+  | "VIDEO_ERROR"
+  | "NO_REMOTE_TRACK"
+  | "TRACK_LIVE_VIDEO_OFF"
+  | "TRACK_LIVE_VIDEO_ON"
+  | "VIDEO_DECODING";
 
 export interface ParticipantTileProps {
   peerId: string;
@@ -37,40 +44,265 @@ export function ParticipantTile({
   onToggleFraming,
 }: ParticipantTileProps) {
   const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const [isDecodingConfirmed, setIsDecodingConfirmed] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [trackLiveState, setTrackLiveState] = useState<{
+    trackExists: boolean;
+    readyState: MediaStreamTrackState;
+    enabled: boolean;
+    muted: boolean;
+  }>({
+    trackExists: false,
+    readyState: "ended",
+    enabled: false,
+    muted: false,
+  });
 
+  // Lifecycle forensic timestamps
+  const lifecycleRef = useRef<{
+    attachedAt?: number;
+    metadataAt?: number;
+    canplayAt?: number;
+    playingAt?: number;
+    firstFrameAt?: number;
+    framesDecoded: number;
+    rvfcHandle?: number;
+  }>({ framesDecoded: 0 });
+
+  // ── Track inspections & Event Listeners ─────────────────────────────────────
+  const primaryTrack = useMemo(() => {
+    if (!stream) return null;
+    const vTracks = stream.getVideoTracks();
+    return vTracks.length > 0 ? vTracks[0] : null;
+  }, [stream]);
+
+  useEffect(() => {
+    if (!primaryTrack) {
+      setTrackLiveState({
+        trackExists: false,
+        readyState: "ended",
+        enabled: false,
+        muted: false,
+      });
+      setIsDecodingConfirmed(false);
+      return;
+    }
+
+    const updateTrackState = () => {
+      setTrackLiveState({
+        trackExists: true,
+        readyState: primaryTrack.readyState,
+        enabled: primaryTrack.enabled,
+        muted: primaryTrack.muted,
+      });
+    };
+
+    updateTrackState();
+
+    const handleMute = () => {
+      console.log(`[ParticipantTile][${peerId}] videoTrack muted (isLocal=${isLocal})`);
+      updateTrackState();
+      setIsDecodingConfirmed(false);
+    };
+
+    const handleUnmute = () => {
+      console.log(`[ParticipantTile][${peerId}] videoTrack unmuted (isLocal=${isLocal})`);
+      updateTrackState();
+    };
+
+    const handleEnded = () => {
+      console.log(`[ParticipantTile][${peerId}] videoTrack ended (isLocal=${isLocal})`);
+      updateTrackState();
+      setIsDecodingConfirmed(false);
+    };
+
+    primaryTrack.addEventListener("mute", handleMute);
+    primaryTrack.addEventListener("unmute", handleUnmute);
+    primaryTrack.addEventListener("ended", handleEnded);
+
+    return () => {
+      primaryTrack.removeEventListener("mute", handleMute);
+      primaryTrack.removeEventListener("unmute", handleUnmute);
+      primaryTrack.removeEventListener("ended", handleEnded);
+    };
+  }, [primaryTrack, peerId, isLocal]);
+
+  // ── Stream Attachment & Playback Lifecycle ──────────────────────────────────
   const attachStream = useCallback(
     (videoEl: HTMLVideoElement | null, mediaStream: MediaStream | null, isVideoOn: boolean) => {
       if (!videoEl) return;
-      if (mediaStream && isVideoOn) {
+
+      const vTracks = mediaStream ? mediaStream.getVideoTracks() : [];
+      const hasTrack = vTracks.length > 0;
+
+      if (mediaStream && isVideoOn && hasTrack) {
         if (videoEl.srcObject !== mediaStream) {
+          lifecycleRef.current = {
+            attachedAt: performance.now(),
+            framesDecoded: 0,
+          };
+          console.log(
+            `[ParticipantTile][${peerId}] Attaching ${isLocal ? "local" : "remote"} stream (vTracks=${vTracks.length} readyState=${vTracks[0].readyState})`,
+          );
           videoEl.srcObject = mediaStream;
+          setPlaybackError(null);
         }
-        videoEl.play().catch(() => {
-          // Autoplay policy or gesture required
-        });
+
+        videoEl
+          .play()
+          .then(() => {
+            if (!lifecycleRef.current.playingAt) {
+              lifecycleRef.current.playingAt = performance.now();
+            }
+          })
+          .catch((err) => {
+            const errName = err instanceof Error ? err.name : String(err);
+            if (errName !== "AbortError") {
+              console.warn(
+                `[ParticipantTile][${peerId}] play() deferred/blocked (isLocal=${isLocal}):`,
+                err,
+              );
+              setPlaybackError(errName);
+            }
+          });
       } else {
-        videoEl.srcObject = null;
+        if (videoEl.srcObject !== null) {
+          console.log(
+            `[ParticipantTile][${peerId}] Detaching stream (isVideoOn=${isVideoOn} hasTrack=${hasTrack})`,
+          );
+          videoEl.srcObject = null;
+        }
+        setIsDecodingConfirmed(false);
       }
     },
-    [],
+    [isLocal, peerId],
   );
 
   useEffect(() => {
     attachStream(videoElRef.current, stream, videoEnabled);
   }, [stream, videoEnabled, attachStream]);
 
-  const hasLiveVideo = !!stream && videoEnabled;
+  // ── Multi-Tier Frame Decoding Verification ──────────────────────────────────
+  useEffect(() => {
+    const videoEl = videoElRef.current;
+    if (!videoEl || !primaryTrack || !videoEnabled || primaryTrack.readyState !== "live") {
+      setIsDecodingConfirmed(false);
+      return;
+    }
 
-  // Get user initials for fallback avatar
+    let isMounted = true;
+
+    // Hierarchy Tier 1: requestVideoFrameCallback (Standard in Chromium, Safari 15.4+, Firefox 128+)
+    if (
+      "requestVideoFrameCallback" in videoEl &&
+      typeof videoEl.requestVideoFrameCallback === "function"
+    ) {
+      const onFrame = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
+        if (!isMounted) return;
+        if (!lifecycleRef.current.firstFrameAt) {
+          lifecycleRef.current.firstFrameAt = now;
+          const delta = lifecycleRef.current.attachedAt
+            ? Math.round(now - lifecycleRef.current.attachedAt)
+            : 0;
+          console.log(
+            `[ParticipantTile][${peerId}] FIRST DECODED FRAME in ${delta}ms (${metadata.width}x${metadata.height})`,
+          );
+        }
+        lifecycleRef.current.framesDecoded++;
+        setIsDecodingConfirmed(true);
+
+        // Schedule next frame poll
+        lifecycleRef.current.rvfcHandle = videoEl.requestVideoFrameCallback(onFrame);
+      };
+
+      lifecycleRef.current.rvfcHandle = videoEl.requestVideoFrameCallback(onFrame);
+
+      return () => {
+        isMounted = false;
+        if (lifecycleRef.current.rvfcHandle && "cancelVideoFrameCallback" in videoEl) {
+          videoEl.cancelVideoFrameCallback(lifecycleRef.current.rvfcHandle);
+        }
+      };
+    }
+
+    // Hierarchy Tier 2: getVideoPlaybackQuality (Standard Video Quality API)
+    const checkPlaybackQuality = () => {
+      if (!isMounted) return;
+      if (
+        "getVideoPlaybackQuality" in videoEl &&
+        typeof videoEl.getVideoPlaybackQuality === "function"
+      ) {
+        const quality = videoEl.getVideoPlaybackQuality();
+        if (quality && quality.totalVideoFrames > 0) {
+          if (!lifecycleRef.current.firstFrameAt) {
+            lifecycleRef.current.firstFrameAt = performance.now();
+            console.log(
+              `[ParticipantTile][${peerId}] Decoded frames confirmed via PlaybackQuality (${quality.totalVideoFrames} frames)`,
+            );
+          }
+          setIsDecodingConfirmed(true);
+          return;
+        }
+      }
+
+      // Hierarchy Tier 3: Universal Fallback (dimensions > 0 + readyState >= HAVE_CURRENT_DATA)
+      if (
+        videoEl.videoWidth > 0 &&
+        videoEl.videoHeight > 0 &&
+        videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        !videoEl.paused &&
+        !videoEl.ended
+      ) {
+        if (!lifecycleRef.current.firstFrameAt) {
+          lifecycleRef.current.firstFrameAt = performance.now();
+          console.log(
+            `[ParticipantTile][${peerId}] Decoded frames confirmed via Dimension/ReadyState fallback (${videoEl.videoWidth}x${videoEl.videoHeight})`,
+          );
+        }
+        setIsDecodingConfirmed(true);
+      }
+    };
+
+    const interval = setInterval(checkPlaybackQuality, 200);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [primaryTrack, videoEnabled, peerId]);
+
+  // ── Explicit Video Rendering State Priority ─────────────────────────────────
+  const videoState: VideoRenderState = useMemo(() => {
+    if (playbackError) return "VIDEO_ERROR";
+    if (!trackLiveState.trackExists || trackLiveState.readyState === "ended") {
+      return "NO_REMOTE_TRACK";
+    }
+    if (!videoEnabled || !trackLiveState.enabled || trackLiveState.muted) {
+      return "TRACK_LIVE_VIDEO_OFF";
+    }
+    if (isDecodingConfirmed) {
+      return "VIDEO_DECODING";
+    }
+    return "TRACK_LIVE_VIDEO_ON";
+  }, [playbackError, trackLiveState, videoEnabled, isDecodingConfirmed]);
+
+  // Initials for avatar fallback
   const getInitials = (name: string) => {
-    const parts = name.trim().split(/\s+/);
+    const clean = name.replace(/\(You\)/gi, "").trim();
+    const parts = clean.split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return name.slice(0, 2).toUpperCase() || "PX";
+    return clean.slice(0, 2).toUpperCase() || "PX";
   };
 
   const isGestureSafe = framingMode === "gesture-safe";
+
+  // Canonical presentation: (You) is ONLY added for isLocal === true
+  const presentationName = isLocal
+    ? displayName
+      ? `${displayName} (You)`
+      : "You"
+    : displayName || "Participant";
 
   return (
     <div
@@ -80,16 +312,11 @@ export function ParticipantTile({
       } ${isPiP ? "shadow-2xl border-cream/30 ring-1 ring-noir/40" : ""} ${
         onClick ? "cursor-pointer" : ""
       } ${className}`}
-      aria-label={`Participant ${displayName}${isLocal ? " (You)" : ""}, Camera ${
+      aria-label={`Participant ${presentationName}, Camera ${
         videoEnabled ? "On" : "Off"
       }, Microphone ${audioEnabled ? "On" : "Muted"}`}
     >
-      {/* Ambient Backdrop for Gesture-Safe letterboxed mode */}
-      {isGestureSafe && hasLiveVideo && (
-        <div className="absolute inset-0 bg-gradient-to-b from-noir/90 via-noir to-noir/95 pointer-events-none" />
-      )}
-
-      {/* Video Element */}
+      {/* ── Single Authority Video Element ───────────────────────────────── */}
       <video
         ref={(el) => {
           videoElRef.current = el;
@@ -101,24 +328,34 @@ export function ParticipantTile({
         data-peer-id={peerId}
         data-is-local={isLocal ? "true" : "false"}
         data-mirror={isLocal ? "true" : "false"}
-        className={`h-full w-full transition-all duration-300 ${
+        onLoadedMetadata={(e) => {
+          lifecycleRef.current.metadataAt = performance.now();
+          const v = e.currentTarget;
+          console.log(
+            `[ParticipantTile][${peerId}] loadedmetadata: ${v.videoWidth}x${v.videoHeight} (isLocal=${isLocal})`,
+          );
+        }}
+        onCanPlay={() => {
+          lifecycleRef.current.canplayAt = performance.now();
+          console.log(`[ParticipantTile][${peerId}] canplay (isLocal=${isLocal})`);
+        }}
+        onPlaying={() => {
+          lifecycleRef.current.playingAt = performance.now();
+          console.log(`[ParticipantTile][${peerId}] playing (isLocal=${isLocal})`);
+        }}
+        className={`relative z-10 h-full w-full transition-opacity duration-300 ${
           isGestureSafe ? "object-contain p-1 sm:p-2" : "object-cover"
         } ${isLocal ? "video-mirrored" : "video-natural"} ${
-          hasLiveVideo ? "opacity-100" : "pointer-events-none opacity-0"
+          videoState === "VIDEO_DECODING" ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
-        style={
-          isLocal
-            ? { transform: "scaleX(-1)", WebkitTransform: "scaleX(-1)", scale: "none" }
-            : { transform: "none", WebkitTransform: "none", scale: "none" }
-        }
       />
 
       {/* Optional Overlay Children (e.g. Sign Recognition HUD) */}
       {children}
 
-      {/* Camera Off / Fallback Overlay */}
-      {!hasLiveVideo && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-noir via-noir/95 to-wine/40">
+      {/* ── Fallback Overlay (Driven Strictly by State Machine) ───────────── */}
+      {videoState !== "VIDEO_DECODING" && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 text-center bg-gradient-to-br from-noir via-noir/95 to-wine/40">
           <div
             className={`flex items-center justify-center rounded-full bg-cream/10 text-cream/90 shadow-inner font-display font-bold tracking-wider border border-cream/15 ${
               isPiP ? "h-10 w-10 text-sm" : "h-16 w-16 sm:h-20 sm:w-20 text-xl sm:text-2xl"
@@ -126,18 +363,38 @@ export function ParticipantTile({
           >
             {getInitials(displayName)}
           </div>
+
           {!isPiP && (
             <div className="mt-3 flex items-center gap-1.5 text-xs text-cream/60 font-medium">
-              <VideoOff className="h-3.5 w-3.5 text-crimson" />
-              <span>Camera Off</span>
+              {videoState === "TRACK_LIVE_VIDEO_OFF" ? (
+                <>
+                  <VideoOff className="h-3.5 w-3.5 text-crimson" />
+                  <span>Camera Off</span>
+                </>
+              ) : videoState === "TRACK_LIVE_VIDEO_ON" ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 text-amber-400 animate-spin" />
+                  <span>Connecting video...</span>
+                </>
+              ) : videoState === "VIDEO_ERROR" ? (
+                <>
+                  <AlertCircle className="h-3.5 w-3.5 text-crimson" />
+                  <span>Video Unavailable</span>
+                </>
+              ) : (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Waiting for video...</span>
+                </>
+              )}
             </div>
           )}
         </div>
       )}
 
       {/* Top Right Controls & Status */}
-      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5">
-        {/* Gesture-Safe Framing Indicator / Toggle Button (for remote non-PiP tiles) */}
+      <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
+        {/* Gesture-Safe Framing Toggle (for remote non-PiP tiles) */}
         {!isLocal && !isPiP && onToggleFraming && (
           <button
             type="button"
@@ -184,7 +441,7 @@ export function ParticipantTile({
 
       {/* Bottom Left Identity & Microphone Pill */}
       <div
-        className={`absolute bottom-2.5 left-2.5 z-10 flex items-center justify-between gap-2 rounded-full bg-noir/85 backdrop-blur-md border border-cream/10 shadow-md ${
+        className={`absolute bottom-2.5 left-2.5 z-20 flex items-center justify-between gap-2 rounded-full bg-noir/85 backdrop-blur-md border border-cream/10 shadow-md ${
           isPiP ? "px-2 py-0.5 max-w-[calc(100%-1rem)]" : "px-3 py-1.5 max-w-[calc(100%-1.25rem)]"
         }`}
       >
@@ -196,10 +453,10 @@ export function ParticipantTile({
           />
           <span
             className={`truncate font-semibold text-cream ${isPiP ? "text-[10px]" : "text-xs"}`}
-            title={`${displayName}${isLocal ? " (You)" : ""}`}
+            title={presentationName}
             suppressHydrationWarning
           >
-            {displayName} {isLocal && "(You)"}
+            {presentationName}
           </span>
         </div>
 

@@ -4,22 +4,35 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
-import { useAuth } from "@/context/auth-context";
-import { useAccessibility } from "@/context/accessibility-context";
+import { useAuth } from "@/hooks/use-auth";
+import { useAccessibility } from "@/hooks/use-accessibility";
 import { redirectIfAuthenticated } from "@/lib/auth-helpers";
 import {
   ALL_PROFILES_LIST,
   DEFAULT_PREFERENCES_BY_PROFILE,
   type AccessibilityProfile,
 } from "@/lib/accessibility";
-import { ArrowUpRight, CheckCircle2, Loader2, AlertCircle, Eye, Ear, MessageSquare, User, Check } from "lucide-react";
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Eye,
+  Ear,
+  MessageSquare,
+  User,
+  Check,
+} from "lucide-react";
 
 export const Route = createFileRoute("/register")({
   beforeLoad: redirectIfAuthenticated,
   head: () => ({
     meta: [
       { title: "Create account — VOXONIX" },
-      { name: "description", content: "Create your Voxonix account and choose your communication mode." },
+      {
+        name: "description",
+        content: "Create your Voxonix account and choose your communication mode.",
+      },
     ],
   }),
   component: RegisterPage,
@@ -272,7 +285,9 @@ function RegisterPage() {
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setValue("accessibilityProfile", p.id, { shouldValidate: true })}
+                      onClick={() =>
+                        setValue("accessibilityProfile", p.id, { shouldValidate: true })
+                      }
                       className={`relative flex flex-col p-3.5 rounded-xl border text-left transition-all ${
                         isSelected
                           ? "border-crimson bg-crimson/5 ring-1 ring-crimson shadow-sm"

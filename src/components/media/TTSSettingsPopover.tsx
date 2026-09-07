@@ -1,5 +1,5 @@
 import { Volume2, VolumeX, Sliders, X, Headphones, Speaker, ShieldCheck } from "lucide-react";
-import { useTTS } from "@/context/tts-context";
+import { useTTS } from "@/hooks/use-tts";
 
 interface TTSSettingsPopoverProps {
   isOpen: boolean;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { SpeechOutputEngine } from "@/lib/tts/speech-output-engine";
 import type { TTSTelemetry } from "@/lib/tts/types";
 import type { CaptionPayload } from "@/lib/webrtc/signaling-protocol";
-import { useTTS } from "@/context/tts-context";
+import { useTTS } from "@/hooks/use-tts";
 
 declare global {
   interface Window {
@@ -19,7 +19,7 @@ interface UseSpeechOutputProps {
 
 export function useSpeechOutput({
   localPeerId,
-  localDisplayName = "You",
+  localDisplayName = "Participant",
   captions,
   broadcastCaption,
 }: UseSpeechOutputProps) {

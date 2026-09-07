@@ -48,6 +48,7 @@ export type SignalMessage =
       roomId: string;
       peerId: string;
       displayName?: string;
+      authToken?: string;
     }
   | {
       type: "leave";

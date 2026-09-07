@@ -1,42 +1,8 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  type ReactNode,
-} from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import type { TTSConfig, TTSVoice } from "@/lib/tts/types";
 import { BrowserTTSProvider } from "@/lib/tts/browser-tts-provider";
-import { useAccessibility } from "./accessibility-context";
-
-const TTS_STORAGE_KEY = "voxonix.ttsConfig";
-
-export interface TTSContextType {
-  config: TTSConfig;
-  voices: TTSVoice[];
-  isSupported: boolean;
-  isRecommended: boolean;
-  updateConfig: (patch: Partial<TTSConfig>) => void;
-  toggleTTS: () => void;
-  enableWithGesture: () => Promise<boolean>;
-  refreshVoices: () => Promise<TTSVoice[]>;
-}
-
-const DEFAULT_CONFIG: TTSConfig = {
-  enabled: false,
-  autoSpeakCaptions: true,
-  rate: 1.0,
-  pitch: 1.0,
-  volume: 1.0,
-  language: "en-US",
-  duckMicDuringSpeech: true,
-  audioDeviceMode: "speakers",
-  interruptBacklogOnTyped: true,
-};
-
-const TTSContext = createContext<TTSContextType | undefined>(undefined);
+import { useAccessibility } from "@/hooks/use-accessibility";
+import { TTSContext, TTS_STORAGE_KEY, DEFAULT_TTS_CONFIG } from "@/hooks/use-tts";
 
 export function TTSContextProvider({ children }: { children: ReactNode }) {
   const { profile } = useAccessibility();
@@ -45,7 +11,7 @@ export function TTSContextProvider({ children }: { children: ReactNode }) {
     providerRef.current = new BrowserTTSProvider();
   }
 
-  const [config, setConfigState] = useState<TTSConfig>(DEFAULT_CONFIG);
+  const [config, setConfigState] = useState<TTSConfig>(DEFAULT_TTS_CONFIG);
   const [voices, setVoices] = useState<TTSVoice[]>([]);
   const isSupported = providerRef.current.isSupported();
   const isRecommended = profile === "blind";
@@ -148,12 +114,4 @@ export function TTSContextProvider({ children }: { children: ReactNode }) {
       {children}
     </TTSContext.Provider>
   );
-}
-
-export function useTTS(): TTSContextType {
-  const context = useContext(TTSContext);
-  if (!context) {
-    throw new Error("useTTS must be used within a TTSContextProvider");
-  }
-  return context;
 }

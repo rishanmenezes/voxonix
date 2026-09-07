@@ -23,44 +23,10 @@
  *     - sign-out from another tab
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import type { Session, User, AuthError } from "@supabase/supabase-js";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
-
-import type { CommunicationPreferences } from "@/lib/accessibility";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export interface SignUpPayload {
-  email: string;
-  password: string;
-  displayName: string;
-  accessibilityProfile?: string;
-  communicationPreferences?: CommunicationPreferences | Record<string, unknown>;
-}
-
-export interface AuthResult {
-  error: AuthError | null;
-}
-
-export interface AuthContextType {
-  user: User | null;
-  session: Session | null;
-  /** True while the initial session is being loaded from storage. */
-  loading: boolean;
-  /** True when there is an active, loaded session. */
-  isAuthenticated: boolean;
-  signUp: (payload: SignUpPayload) => Promise<AuthResult>;
-  signIn: (email: string, password: string) => Promise<AuthResult>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<AuthResult>;
-}
-
-// ── Context ───────────────────────────────────────────────────────────────────
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// ── Provider ──────────────────────────────────────────────────────────────────
+import { AuthContext, type SignUpPayload, type AuthResult } from "@/hooks/use-auth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Always start from the "loading" state so SSR and client renders agree.
@@ -126,7 +92,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     return { error };
   }, []);
 
@@ -160,14 +129,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
-
-export function useAuth(): AuthContextType {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return ctx;
 }

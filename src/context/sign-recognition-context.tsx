@@ -1,32 +1,13 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import type { SignRecognitionConfig } from "@/lib/vision/types";
-
-const SIGN_STORAGE_KEY = "voxonix.signConfig";
-
-export interface SignRecognitionContextType {
-  config: SignRecognitionConfig;
-  updateConfig: (patch: Partial<SignRecognitionConfig>) => void;
-  toggleSignRecognition: () => void;
-}
-
-const DEFAULT_CONFIG: SignRecognitionConfig = {
-  enabled: false,
-  mode: "all",
-  vocabularyTier: "production-safe",
-  stabilityThresholdMs: 350,
-  minConfidence: 0.6,
-  minMargin: 0.2,
-  autoSpaceTimeoutMs: 1800,
-  repeatHoldIntervalMs: 1100,
-  showHUD: true,
-  enablePoseContext: true,
-  enableFaceContext: true,
-};
-
-const SignRecognitionContext = createContext<SignRecognitionContextType | undefined>(undefined);
+import {
+  SignRecognitionContext,
+  SIGN_STORAGE_KEY,
+  DEFAULT_SIGN_CONFIG,
+} from "@/hooks/use-sign-recognition-context";
 
 export function SignRecognitionProvider({ children }: { children: ReactNode }) {
-  const [config, setConfigState] = useState<SignRecognitionConfig>(DEFAULT_CONFIG);
+  const [config, setConfigState] = useState<SignRecognitionConfig>(DEFAULT_SIGN_CONFIG);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -79,12 +60,4 @@ export function SignRecognitionProvider({ children }: { children: ReactNode }) {
       {children}
     </SignRecognitionContext.Provider>
   );
-}
-
-export function useSignRecognitionContext(): SignRecognitionContextType {
-  const ctx = useContext(SignRecognitionContext);
-  if (!ctx) {
-    throw new Error("useSignRecognitionContext must be used within a SignRecognitionProvider");
-  }
-  return ctx;
 }

@@ -9,7 +9,7 @@ import type {
   BenchmarkEvaluationResult,
 } from "@/lib/vision/types";
 import type { CaptionPayload } from "@/lib/webrtc/signaling-protocol";
-import { useSignRecognitionContext } from "@/context/sign-recognition-context";
+import { useSignRecognitionContext } from "@/hooks/use-sign-recognition-context";
 
 declare global {
   interface Window {
@@ -28,7 +28,7 @@ interface UseSignRecognitionProps {
 
 export function useSignRecognition({
   localPeerId,
-  localDisplayName = "You",
+  localDisplayName = "Participant",
   isCameraLive,
   getVideoElement,
   broadcastCaption,

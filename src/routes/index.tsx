@@ -3,7 +3,7 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { InteractiveBackground } from "@/components/InteractiveBackground";
 import { ArrowUpRight, Video, Mic, Accessibility, Wifi } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useAuth } from "@/context/auth-context";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/")({
   // Authenticated users who land on the public root are sent straight to their dashboard.

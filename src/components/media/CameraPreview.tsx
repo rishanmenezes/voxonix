@@ -26,7 +26,6 @@ export function CameraPreview() {
           className={`h-full w-full object-cover video-mirrored transition-opacity duration-300 ${
             state === "live" ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
-          style={{ transform: "scaleX(-1)", WebkitTransform: "scaleX(-1)", scale: "none" }}
         />
 
         {/* Fallback overlay when not live */}

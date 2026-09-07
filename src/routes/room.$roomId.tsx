@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import type { User, Session } from "@supabase/supabase-js";
 import {
   Mic,
   MicOff,
@@ -20,11 +21,14 @@ import {
   Keyboard,
   Hand,
   Users,
+  Loader2,
 } from "lucide-react";
-import { useAuth } from "@/context/auth-context";
-import { useAccessibility } from "@/context/accessibility-context";
-import { useTTS } from "@/context/tts-context";
-import { useSignRecognitionContext } from "@/context/sign-recognition-context";
+import { requireAuth } from "@/lib/auth-helpers";
+import { useAuth } from "@/hooks/use-auth";
+import { useAccessibility } from "@/hooks/use-accessibility";
+import { useTTS } from "@/hooks/use-tts";
+
+import { useSignRecognitionContext } from "@/hooks/use-sign-recognition-context";
 import { usePeerConnection, type Participant } from "@/hooks/use-peer-connection";
 import { ParticipantTile, type FramingMode } from "@/components/media/ParticipantTile";
 import { useSpeechToText } from "@/hooks/use-speech-to-text";
@@ -37,22 +41,66 @@ import { SignRecognitionHUD } from "@/components/media/SignRecognitionHUD";
 import { InteractiveBackground } from "@/components/InteractiveBackground";
 
 export const Route = createFileRoute("/room/$roomId")({
-  component: RoomComponent,
+  beforeLoad: requireAuth,
+  component: RoomRouteComponent,
   head: () => ({
     meta: [
       { title: "1-to-1 Call — VOXONIX" },
       {
         name: "description",
-        content: "Unified accessible 1-to-1 real-time video, speech, sign, and text communication room.",
+        content:
+          "Unified accessible 1-to-1 real-time video, speech, sign, and text communication room.",
       },
     ],
   }),
 });
 
-function RoomComponent() {
+function RoomRouteComponent() {
   const { roomId } = Route.useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, session, loading, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (!loading && (!isAuthenticated || !user || !session)) {
+      navigate({
+        to: "/login",
+        search: {
+          redirect: typeof window !== "undefined" ? window.location.pathname : `/room/${roomId}`,
+        },
+      });
+    }
+  }, [loading, isAuthenticated, user, session, navigate, roomId]);
+
+  if (loading) {
+    return (
+      <div className="relative min-h-[100dvh] flex flex-col items-center justify-center bg-background text-noir p-6">
+        <InteractiveBackground />
+        <div className="relative z-10 flex flex-col items-center gap-4 rounded-3xl border border-noir/15 bg-card/90 p-8 shadow-2xl backdrop-blur-md text-center max-w-sm">
+          <Loader2 className="h-8 w-8 text-crimson animate-spin" />
+          <h2 className="font-display text-2xl font-bold text-noir">Authenticating Call Room</h2>
+          <p className="text-xs text-noir/65">
+            Verifying secure session token before initializing media & room connections...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user || !session) {
+    return null;
+  }
+
+  return <AuthenticatedRoom user={user} session={session} roomId={roomId} />;
+}
+
+interface AuthenticatedRoomProps {
+  user: User;
+  session: Session;
+  roomId: string;
+}
+
+function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
+  const navigate = useNavigate();
   const { profile, profileInfo, preferences } = useAccessibility();
 
   // Derive authenticated display name
@@ -60,7 +108,7 @@ function RoomComponent() {
     user?.user_metadata?.display_name ||
     user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||
-    "You";
+    "Participant";
 
   // Pre-call readiness gate: ensures user confirms camera/mic & unlocks audio gesture
   const [hasEnteredCall, setHasEnteredCall] = useState(false);
@@ -84,6 +132,7 @@ function RoomComponent() {
     initialRoomId: roomId,
     autoJoin: hasEnteredCall,
     displayName,
+    authToken: session.access_token,
   });
 
   const cameraIsLive = localVideoEnabled;
@@ -112,10 +161,7 @@ function RoomComponent() {
   }, []);
 
   // Text-to-Speech (TTS) & Speech Output Engine
-  const {
-    config: ttsConfig,
-    enableWithGesture,
-  } = useTTS();
+  const { config: ttsConfig, enableWithGesture } = useTTS();
 
   const {
     isSpeaking: isTTSSpeaking,
@@ -219,13 +265,18 @@ function RoomComponent() {
 
         {/* Top bar */}
         <header className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
-          <Link to="/dashboard" className="flex items-center gap-1.5 text-sm font-semibold text-noir/70 hover:text-crimson transition">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-1.5 text-sm font-semibold text-noir/70 hover:text-crimson transition"
+          >
             <ArrowLeft className="h-4 w-4" />
             <span>Dashboard</span>
           </Link>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-[20px] italic text-wine">Voxonix</span>
-            <span className="font-display text-[20px] font-medium tracking-[0.04em] text-noir">✕ AI</span>
+            <span className="font-display text-[20px] font-medium tracking-[0.04em] text-noir">
+              ✕ AI
+            </span>
           </div>
           <span className="text-xs font-mono font-bold uppercase text-noir/60 bg-noir/5 px-2.5 py-1 rounded-full">
             Room {roomId}
@@ -253,10 +304,16 @@ function RoomComponent() {
               {/* Camera Status */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                    cameraIsLive ? "bg-emerald-100 text-emerald-800" : "bg-noir/10 text-noir/60"
-                  }`}>
-                    {cameraIsLive ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                      cameraIsLive ? "bg-emerald-100 text-emerald-800" : "bg-noir/10 text-noir/60"
+                    }`}
+                  >
+                    {cameraIsLive ? (
+                      <Video className="h-4 w-4" />
+                    ) : (
+                      <VideoOff className="h-4 w-4" />
+                    )}
                   </div>
                   <div>
                     <p className="text-xs font-bold text-noir">Camera</p>
@@ -279,10 +336,18 @@ function RoomComponent() {
               {/* Microphone Status */}
               <div className="flex items-center justify-between border-t border-noir/10 pt-3">
                 <div className="flex items-center gap-2.5">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                    !microphone.isMuted ? "bg-emerald-100 text-emerald-800" : "bg-crimson/10 text-crimson"
-                  }`}>
-                    {!microphone.isMuted ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                  <div
+                    className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                      !microphone.isMuted
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-crimson/10 text-crimson"
+                    }`}
+                  >
+                    {!microphone.isMuted ? (
+                      <Mic className="h-4 w-4" />
+                    ) : (
+                      <MicOff className="h-4 w-4" />
+                    )}
                   </div>
                   <div>
                     <p className="text-xs font-bold text-noir">Microphone</p>
@@ -314,7 +379,10 @@ function RoomComponent() {
                 </div>
                 <div className="flex items-center gap-2 text-noir">
                   <Check className="h-3.5 w-3.5 text-emerald-600 stroke-[3]" />
-                  <span>Speech Output {ttsConfig.enabled || preferences.speechOutputEnabled ? "Ready" : "Off"}</span>
+                  <span>
+                    Speech Output{" "}
+                    {ttsConfig.enabled || preferences.speechOutputEnabled ? "Ready" : "Off"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-noir">
                   <Check className="h-3.5 w-3.5 text-emerald-600 stroke-[3]" />
@@ -391,7 +459,9 @@ function RoomComponent() {
           {/* Center: Brand Mark */}
           <div className="hidden md:flex items-baseline gap-1.5">
             <span className="font-display text-[18px] italic text-wine">Voxonix</span>
-            <span className="font-display text-[18px] font-medium tracking-[0.04em] text-noir">✕ AI</span>
+            <span className="font-display text-[18px] font-medium tracking-[0.04em] text-noir">
+              ✕ AI
+            </span>
           </div>
 
           {/* Right: Live Connection State & Copy Link */}
@@ -429,9 +499,7 @@ function RoomComponent() {
                 id="btn-toggle-diagnostics"
                 onClick={() => setShowDiagnostics(!showDiagnostics)}
                 className={`rounded-full p-1.5 transition ${
-                  showDiagnostics
-                    ? "bg-noir text-cream"
-                    : "bg-noir/5 text-noir/70 hover:bg-noir/10"
+                  showDiagnostics ? "bg-noir text-cream" : "bg-noir/5 text-noir/70 hover:bg-noir/10"
                 }`}
                 title="Toggle Diagnostics (Dev Mode)"
               >
@@ -455,7 +523,10 @@ function RoomComponent() {
                 <Activity className="h-3.5 w-3.5 text-crimson" />
                 Mesh WebRTC, STT & TTS Diagnostics
               </span>
-              <button onClick={() => setShowDiagnostics(false)} className="text-noir/50 hover:text-noir">
+              <button
+                onClick={() => setShowDiagnostics(false)}
+                className="text-noir/50 hover:text-noir"
+              >
                 ✕ Close
               </button>
             </div>
@@ -466,15 +537,21 @@ function RoomComponent() {
               </div>
               <div className="rounded-lg border border-noir/10 bg-background/50 p-2">
                 <span className="text-noir/50 block">STT State / Provider</span>
-                <span className="font-semibold text-emerald-700">{sttSystemState} ({activeProviderName})</span>
+                <span className="font-semibold text-emerald-700">
+                  {sttSystemState} ({activeProviderName})
+                </span>
               </div>
               <div className="rounded-lg border border-noir/10 bg-background/50 p-2">
                 <span className="text-noir/50 block">Speech Output (TTS)</span>
-                <span className="font-semibold text-wine">{ttsConfig.enabled ? "Active" : "Disabled"}</span>
+                <span className="font-semibold text-wine">
+                  {ttsConfig.enabled ? "Active" : "Disabled"}
+                </span>
               </div>
               <div className="rounded-lg border border-noir/10 bg-background/50 p-2">
                 <span className="text-noir/50 block">Sign Vision Model</span>
-                <span className="font-semibold text-amber-700">{signConfig.enabled ? (isSignModelLoading ? "Loading..." : "Ready") : "Off"}</span>
+                <span className="font-semibold text-amber-700">
+                  {signConfig.enabled ? (isSignModelLoading ? "Loading..." : "Ready") : "Off"}
+                </span>
               </div>
             </div>
           </div>
@@ -529,7 +606,9 @@ function RoomComponent() {
                     Waiting for partner to join...
                   </h2>
                   <p className="mt-2 text-xs sm:text-sm text-noir/65 max-w-md">
-                    Share your 6-character room code <strong className="font-mono font-bold text-noir uppercase">{roomId}</strong> or send them the invite link.
+                    Share your 6-character room code{" "}
+                    <strong className="font-mono font-bold text-noir uppercase">{roomId}</strong> or
+                    send them the invite link.
                   </p>
                   <button
                     onClick={handleCopyLink}
@@ -543,13 +622,13 @@ function RoomComponent() {
 
               {/* Floating Local Selfie PiP (Mirrored, bottom-right on desktop, top-right on mobile) */}
               <div
-                className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 w-36 sm:w-48 aspect-video rounded-2xl overflow-hidden shadow-2xl border-2 border-card transition hover:scale-105"
+                className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 w-36 sm:w-48 aspect-video rounded-2xl overflow-hidden shadow-2xl border-2 border-card"
                 title="Your Camera View (Mirrored)"
               >
                 {localParticipant && (
                   <ParticipantTile
                     peerId={localParticipant.peerId}
-                    displayName="You"
+                    displayName={localParticipant.displayName}
                     stream={localParticipant.stream}
                     isLocal={true}
                     audioEnabled={localParticipant.audioEnabled}
@@ -625,7 +704,11 @@ function RoomComponent() {
             aria-label={microphone.isMuted ? "Unmute Microphone" : "Mute Microphone"}
             title={microphone.isMuted ? "Unmute Microphone" : "Mute Microphone"}
           >
-            {microphone.isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4 text-emerald-400" />}
+            {microphone.isMuted ? (
+              <MicOff className="h-4 w-4" />
+            ) : (
+              <Mic className="h-4 w-4 text-emerald-400" />
+            )}
             <span className="hidden xs:inline">{microphone.isMuted ? "Muted" : "Mic On"}</span>
           </button>
 
@@ -644,7 +727,11 @@ function RoomComponent() {
             aria-label={cameraIsLive ? "Turn Camera Off" : "Turn Camera On"}
             title={cameraIsLive ? "Turn Camera Off" : "Turn Camera On"}
           >
-            {cameraIsLive ? <Video className="h-4 w-4 text-emerald-400" /> : <VideoOff className="h-4 w-4 text-crimson" />}
+            {cameraIsLive ? (
+              <Video className="h-4 w-4 text-emerald-400" />
+            ) : (
+              <VideoOff className="h-4 w-4 text-crimson" />
+            )}
             <span className="hidden xs:inline">{cameraIsLive ? "Camera" : "Camera Off"}</span>
           </button>
 
@@ -658,7 +745,11 @@ function RoomComponent() {
                 : "bg-noir/10 text-noir/70 hover:bg-noir/20"
             }`}
             aria-label={isCaptionsEnabled ? "Disable Captions" : "Enable Captions"}
-            title={isCaptionsEnabled ? "Captions Visible (Click to Hide)" : "Captions Hidden (Click to Show)"}
+            title={
+              isCaptionsEnabled
+                ? "Captions Visible (Click to Hide)"
+                : "Captions Hidden (Click to Show)"
+            }
           >
             <MessageSquare className="h-4 w-4" />
             <span>CC</span>

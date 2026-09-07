@@ -21,18 +21,6 @@
 
 import { createServerClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabasePublishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-if (!supabaseUrl || !supabasePublishableKey) {
-  throw new Error(
-    "Missing Supabase environment variables on server.\n" +
-      "Ensure .env.local is loaded and contains:\n" +
-      "  VITE_SUPABASE_URL\n" +
-      "  VITE_SUPABASE_PUBLISHABLE_KEY",
-  );
-}
-
 /**
  * Creates a Supabase server client scoped to a single request.
  * Reads cookies from the request and writes refreshed cookies to the response.
@@ -41,9 +29,21 @@ if (!supabaseUrl || !supabasePublishableKey) {
  * @returns A Supabase client instance that can read/write server-side auth cookies
  */
 export function createServerSupabase(request: Request) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabasePublishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error(
+      "Missing Supabase environment variables on server.\n" +
+        "Ensure .env.local is loaded and contains:\n" +
+        "  VITE_SUPABASE_URL\n" +
+        "  VITE_SUPABASE_PUBLISHABLE_KEY",
+    );
+  }
+
   const responseHeaders = new Headers();
 
-  const supabase = createServerClient(supabaseUrl!, supabasePublishableKey!, {
+  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
     cookies: {
       get(name: string) {
         const cookieHeader = request.headers.get("cookie") ?? "";

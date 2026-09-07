@@ -1,15 +1,7 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import {
   type AccessibilityProfile,
   type AccessibilityProfileInfo,
-  type CommunicationPreferences,
   ACCESSIBILITY_PROFILES,
   ALL_PROFILES_LIST,
   STORAGE_KEY_PROFILE,
@@ -17,24 +9,12 @@ import {
   DEFAULT_PREFERENCES_BY_PROFILE,
   normalizeAccessibilityProfile,
   normalizeCommunicationPreferences,
+  type CommunicationPreferences,
 } from "@/lib/accessibility";
-import { useAuth } from "./auth-context";
+
+import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase/client";
-
-export interface AccessibilityContextType {
-  profile: AccessibilityProfile | null;
-  profileInfo: AccessibilityProfileInfo | null;
-  preferences: CommunicationPreferences;
-  allProfiles: AccessibilityProfileInfo[];
-  setProfile: (
-    newProfile: AccessibilityProfile | string | null,
-    customPreferences?: Partial<CommunicationPreferences>,
-  ) => Promise<void>;
-  updatePreferences: (patch: Partial<CommunicationPreferences>) => Promise<void>;
-  getCurrentAccessibilityProfile: () => AccessibilityProfileInfo | null;
-}
-
-const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
+import { AccessibilityContext } from "@/hooks/use-accessibility";
 
 export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated } = useAuth();
@@ -72,7 +52,9 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
 
     // 2. Fall back to local cached preferences if unauthenticated or metadata not set yet
     try {
-      const cachedProfile = normalizeAccessibilityProfile(localStorage.getItem(STORAGE_KEY_PROFILE));
+      const cachedProfile = normalizeAccessibilityProfile(
+        localStorage.getItem(STORAGE_KEY_PROFILE),
+      );
       let cachedPrefs: unknown = null;
       const rawPrefs = localStorage.getItem(STORAGE_KEY_PREFERENCES);
       if (rawPrefs) {
@@ -215,12 +197,4 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       {children}
     </AccessibilityContext.Provider>
   );
-}
-
-export function useAccessibility(): AccessibilityContextType {
-  const context = useContext(AccessibilityContext);
-  if (!context) {
-    throw new Error("useAccessibility must be used within an AccessibilityProvider");
-  }
-  return context;
 }
