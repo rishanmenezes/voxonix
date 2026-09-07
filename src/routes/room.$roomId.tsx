@@ -35,6 +35,7 @@ import { useSpeechToText } from "@/hooks/use-speech-to-text";
 import { useSpeechOutput } from "@/hooks/use-speech-output";
 import { useSignRecognition } from "@/hooks/use-sign-recognition";
 import { CaptionsOverlay } from "@/components/media/CaptionsOverlay";
+import { ConversationTranscript } from "@/components/media/ConversationTranscript";
 import { TTSQuickSpeechBar } from "@/components/media/TTSQuickSpeechBar";
 import { AccessibilityControlPanel } from "@/components/media/AccessibilityControlPanel";
 import { SignRecognitionHUD } from "@/components/media/SignRecognitionHUD";
@@ -121,6 +122,7 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
     participants,
     diagnosticsMap,
     isRoomFull,
+    error: connectionError,
     roomState,
     localVideoEnabled,
     localAudioEnabled,
@@ -131,6 +133,7 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
   } = usePeerConnection({
     initialRoomId: roomId,
     autoJoin: hasEnteredCall,
+    autoStartMedia: hasEnteredCall,
     displayName,
     authToken: session.access_token,
   });
@@ -141,6 +144,7 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
   // UI state for 1-to-1 call
   const [isCaptionsEnabled, setIsCaptionsEnabled] = useState(preferences.captionsEnabled);
   const [isAccessibilityPanelOpen, setIsAccessibilityPanelOpen] = useState(false);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [isTypeToSpeakOpen, setIsTypeToSpeakOpen] = useState(preferences.typeToSpeakEnabled);
   const [isGestureSafe, setIsGestureSafe] = useState(preferences.gestureSafeFraming);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -299,7 +303,7 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
               </p>
             </div>
 
-            {/* Hardware Status Preview */}
+            {/* Hardware is intentionally not acquired until the user enters. */}
             <div className="space-y-3 rounded-2xl border border-noir/10 bg-background/60 p-4">
               {/* Camera Status */}
               <div className="flex items-center justify-between">
@@ -318,19 +322,13 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
                   <div>
                     <p className="text-xs font-bold text-noir">Camera</p>
                     <p className="text-[10px] text-noir/50">
-                      {cameraIsLive ? "Active & Ready" : "Camera Off / Disabled"}
+                      {cameraIsLive ? "Active & Ready" : "Starts when you enter the call"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (cameraIsLive) camera.stopCamera();
-                    else camera.startCamera();
-                  }}
-                  className="rounded-lg border border-noir/15 bg-card px-2.5 py-1 text-xs font-semibold text-noir hover:border-noir transition"
-                >
-                  {cameraIsLive ? "Turn Off" : "Turn On"}
-                </button>
+                <span className="rounded-lg border border-noir/15 bg-card px-2.5 py-1 text-xs font-semibold text-noir/60">
+                  On call entry
+                </span>
               </div>
 
               {/* Microphone Status */}
@@ -352,16 +350,13 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
                   <div>
                     <p className="text-xs font-bold text-noir">Microphone</p>
                     <p className="text-[10px] text-noir/50">
-                      {!microphone.isMuted ? "Active & Capturing" : "Muted"}
+                      {micIsAvailable ? "Active & Capturing" : "Starts when you enter the call"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={microphone.toggleMute}
-                  className="rounded-lg border border-noir/15 bg-card px-2.5 py-1 text-xs font-semibold text-noir hover:border-noir transition"
-                >
-                  {microphone.isMuted ? "Unmute" : "Mute"}
-                </button>
+                <span className="rounded-lg border border-noir/15 bg-card px-2.5 py-1 text-xs font-semibold text-noir/60">
+                  On call entry
+                </span>
               </div>
             </div>
 
@@ -560,6 +555,18 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
 
       {/* ── Main 1-to-1 Call Stage ─────────────────────────────────────────── */}
       <main className="relative flex-1 overflow-hidden p-2 sm:p-4 flex items-center justify-center">
+        {(connectionError || camera.error || microphone.error) && (
+          <div
+            role="alert"
+            className="absolute inset-x-3 top-3 z-40 mx-auto flex max-w-6xl items-start gap-3 rounded-xl border border-crimson/30 bg-card/95 px-4 py-3 text-sm text-noir shadow-lg"
+          >
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-crimson" />
+            <span>
+              {connectionError || camera.error || microphone.error}
+              {connectionError && " Check your connection and try leaving and rejoining the room."}
+            </span>
+          </div>
+        )}
         {/* Room Full Error */}
         {isRoomFull ? (
           <div className="mx-auto max-w-md rounded-3xl border border-crimson/20 bg-card p-8 text-center shadow-2xl">
@@ -670,6 +677,14 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
                 />
               </div>
             )}
+
+            {isTranscriptOpen && (
+              <ConversationTranscript
+                captions={captions}
+                localPeerId={peerId}
+                onClose={() => setIsTranscriptOpen(false)}
+              />
+            )}
           </div>
         )}
 
@@ -753,6 +768,17 @@ function AuthenticatedRoom({ user, session, roomId }: AuthenticatedRoomProps) {
           >
             <MessageSquare className="h-4 w-4" />
             <span>CC</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsTranscriptOpen(true)}
+            className="inline-flex min-h-[48px] items-center justify-center gap-1.5 rounded-full bg-noir/10 px-3.5 py-3 text-xs font-semibold text-noir transition hover:bg-noir/20"
+            aria-label="Open conversation transcript"
+            title="Open conversation transcript"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Transcript</span>
           </button>
 
           {/* Accessibility Control Panel (♿) */}

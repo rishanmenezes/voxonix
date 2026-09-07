@@ -5,7 +5,7 @@ import { useAccessibility } from "@/hooks/use-accessibility";
 import { TTSContext, TTS_STORAGE_KEY, DEFAULT_TTS_CONFIG } from "@/hooks/use-tts";
 
 export function TTSContextProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAccessibility();
+  const { profile, preferences } = useAccessibility();
   const providerRef = useRef<BrowserTTSProvider | null>(null);
   if (!providerRef.current) {
     providerRef.current = new BrowserTTSProvider();
@@ -32,6 +32,12 @@ export function TTSContextProvider({ children }: { children: ReactNode }) {
       console.warn("[TTSContext] Error reading localStorage config:", err);
     }
   }, []);
+
+  // Keep the provider aligned with the single effective accessibility
+  // configuration; UI controls update this preference as their durable state.
+  useEffect(() => {
+    setConfigState((prev) => ({ ...prev, enabled: preferences.speechOutputEnabled }));
+  }, [preferences.speechOutputEnabled]);
 
   // Load available system voices
   useEffect(() => {

@@ -39,6 +39,8 @@ export interface UsePeerConnectionOptions {
   autoJoin?: boolean;
   displayName?: string;
   authToken?: string;
+  /** Media is acquired only after the caller has an explicit user intent. */
+  autoStartMedia?: boolean;
 }
 
 export type RoomState =
@@ -120,12 +122,13 @@ export function usePeerConnection(options: UsePeerConnectionOptions = {}) {
 
   const localDisplayName = options.displayName || "Participant";
 
-  // ── Start local camera & mic once on hook init ─────────────────────────────
+  // ── Start local camera & mic only after explicit call entry ────────────────
   useEffect(() => {
+    if (!options.autoStartMedia) return;
     camera.startCamera().catch(() => {});
     microphone.startMicrophone().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [options.autoStartMedia]);
 
   // ── Sync local tracks to all active peer connections ───────────────────────
   const syncLocalTracks = useCallback(() => {
@@ -426,6 +429,7 @@ export function usePeerConnection(options: UsePeerConnectionOptions = {}) {
 
         onError: (data) => {
           console.warn("[WS-Mesh] Signaling error:", data.message);
+          setError(data.message);
         },
 
         // Handle media-state updates from a remote peer
