@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Bun
+.bun/
+
+# TanStack tmp
+.tanstack/
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cloned External References
+_reference/
+
+# Local database store & cached static TTS prompts
+data/*.json
+data/*.backup
+data/*.tmp
+data/gnani-tts-cache/
+
+# Scratch scripts
+scratch/
